@@ -21,7 +21,7 @@ Portafolio web personal + MVP **CompaEstudio** + pipeline CI/CD para Proyecto de
 | Rama | Qué hace |
 |------|----------|
 | `dev` | Pruebas unitarias → integración (PostgreSQL como service) → E2E (Playwright) |
-| `main` | Las mismas pruebas → build y push de la imagen a Docker Hub → `terraform apply` (VM Ubuntu 24.04, VCN, subnet, IP pública) → Ansible configura la VM y levanta el contenedor → (extra) registro DNS en Cloudflare |
+| `main` | Las mismas pruebas → build y push de la imagen a Docker Hub → `terraform apply` (VM Ubuntu 24.04, VCN, subnet, IP pública) → Ansible configura la VM y levanta el contenedor → (extra) Cloudflare Tunnel publica el sitio en una URL `https://*.trycloudflare.com` (y registro DNS si hay dominio propio) |
 
 El estado de Terraform se guarda en OCI Object Storage (backend `http` con una Pre-Authenticated Request), así cada push a `main` actualiza la misma infraestructura en vez de crear otra VM.
 

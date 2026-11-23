@@ -7,3 +7,15 @@ services:
       - "80:80"
       - "443:443"
     restart: unless-stopped
+
+  # Cloudflare Tunnel (TryCloudflare): publica el portafolio en una URL
+  # https://<aleatorio>.trycloudflare.com con certificado válido, sin dominio propio.
+  # Se activa con: docker compose --profile tunnel up -d
+  tunnel:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: portafolio-tunnel
+    command: tunnel --no-autoupdate --url http://portafolio:80
+    depends_on:
+      - portafolio
+    restart: unless-stopped
+    profiles: [tunnel]
