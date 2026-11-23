@@ -35,7 +35,7 @@
           - docker-compose-v2
           - git
           - ufw
-          - iptables-persistent
+          - iptables
         state: present
         update_cache: true
         cache_valid_time: 3600
@@ -55,8 +55,9 @@
         append: true
 
     # --- Firewall ---
-    # Las imágenes Ubuntu de OCI traen reglas iptables que rechazan todo salvo SSH,
-    # por eso se insertan reglas ACCEPT al inicio de la cadena INPUT.
+    # 1) iptables: reglas ACCEPT al inicio de INPUT para 80/443 (efecto inmediato).
+    # 2) ufw: firewall persistente (iptables-persistent choca con ufw en Ubuntu 24.04);
+    #    ufw vuelve a cargar sus reglas iptables para 22/80/443 en cada arranque.
     - name: iptables - permitir tráfico entrante en 80 y 443
       ansible.builtin.iptables:
         chain: INPUT
@@ -68,10 +69,6 @@
         comment: "portafolio {{ item }}"
       loop: [80, 443]
 
-    - name: iptables - guardar reglas de forma persistente
-      ansible.builtin.command: netfilter-persistent save
-      changed_when: true
-
     - name: ufw - permitir SSH, HTTP y HTTPS
       ansible.builtin.command: "ufw allow {{ item }}/tcp"
       loop: "{{ open_ports }}"
@@ -82,6 +79,15 @@
       ansible.builtin.command: ufw --force enable
       register: ufw_enable
       changed_when: "'active' in ufw_enable.stdout"
+
+    - name: Mostrar reglas activas (evidencia)
+      ansible.builtin.shell: "ufw status verbose; iptables -S INPUT | grep -E 'dport (80|443)' || true"
+      register: fw_rules
+      changed_when: false
+
+    - name: Reglas de firewall
+      ansible.builtin.debug:
+        var: fw_rules.stdout_lines
 
     # --- Despliegue ---
     - name: Clonar o actualizar el repositorio con Git
