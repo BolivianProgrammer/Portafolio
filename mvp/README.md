@@ -4,7 +4,7 @@
 (materia, tema, lugar, fecha y cupo) y otros se unen hasta llenar el cupo. El sistema evita
 sobrecupos (incluso con inscripciones simultáneas), inscripciones duplicadas y sesiones en el pasado.
 
-**Integrantes:** Tyler Wilson · _[Nombre del compañero/a]_
+**Integrante:** Tyler Wilson
 
 ## Stack
 | Capa | Tecnología |
