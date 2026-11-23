@@ -144,8 +144,9 @@ jobs:
       OCI_REGION: ${{ secrets.OCI_REGION }}
       TF_VAR_compartment_id: ${{ vars.OCI_COMPARTMENT_OCID || secrets.OCI_TENANCY_OCID }}
       TF_VAR_ssh_public_key: ${{ vars.VM_SSH_PUBLIC_KEY }}
-      # Free tier por defecto; variable VM_SHAPE=VM.Standard.E4.Flex si Santiago no tiene capacidad
-      TF_VAR_shape: ${{ vars.VM_SHAPE || 'VM.Standard.E2.1.Micro' }}
+      # Shapes a intentar en orden (la región a veces responde "Out of host capacity").
+      # VM_SHAPE (variable del repo) va primero si está definida.
+      SHAPES: ${{ vars.VM_SHAPE }} VM.Standard.E5.Flex VM.Standard3.Flex VM.Standard.E4.Flex VM.Standard.E2.1.Micro
     outputs:
       public_ip: ${{ steps.out.outputs.public_ip }}
     steps:
@@ -157,8 +158,20 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init
       - run: terraform validate
-      - run: terraform plan -out=tfplan
-      - run: terraform apply -auto-approve tfplan
+      - name: terraform apply (probando shapes hasta encontrar capacidad)
+        run: |
+          # Si la VM ya existe en el estado, se conserva su shape actual
+          current=$(terraform state show -no-color oci_core_instance.vm 2>/dev/null | awk -F'"' '/^ *shape *=/{print $2; exit}' || true)
+          for shape in $current $SHAPES; do
+            echo "::group::Intentando shape $shape"
+            if terraform apply -auto-approve -no-color -var "shape=$shape" > apply.log 2>&1; then
+              cat apply.log; echo "::endgroup::"; echo "VM creada/actualizada con $shape"; exit 0
+            fi
+            cat apply.log; echo "::endgroup::"
+            grep -q "Out of host capacity" apply.log || { echo "::error::terraform apply falló por otra causa"; exit 1; }
+            echo "::warning::Sin capacidad para $shape, probando el siguiente"
+          done
+          echo "::error::Ningún shape tiene capacidad en la región"; exit 1
       - id: out
         run: echo "public_ip=$(terraform output -raw public_ip)" >> "$GITHUB_OUTPUT"
 
