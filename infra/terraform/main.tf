@@ -94,6 +94,15 @@ resource "oci_core_instance" "vm" {
   display_name        = "${var.prefix}-vm"
   shape               = var.shape
 
+  # Solo los shapes Flex (p. ej. VM.Standard.E4.Flex) requieren OCPUs/memoria
+  dynamic "shape_config" {
+    for_each = endswith(var.shape, ".Flex") ? [1] : []
+    content {
+      ocpus         = var.flex_ocpus
+      memory_in_gbs = var.flex_memory_gbs
+    }
+  }
+
   source_details {
     source_type = "image"
     source_id   = data.oci_core_images.ubuntu_2404.images[0].id

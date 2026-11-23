@@ -30,6 +30,18 @@ variable "shape" {
   default     = "VM.Standard.E2.1.Micro"
 }
 
+variable "flex_ocpus" {
+  description = "OCPUs para shapes *.Flex (de pago)"
+  type        = number
+  default     = 1
+}
+
+variable "flex_memory_gbs" {
+  description = "Memoria en GB para shapes *.Flex (de pago)"
+  type        = number
+  default     = 2
+}
+
 variable "availability_domain_index" {
   type    = number
   default = 0
