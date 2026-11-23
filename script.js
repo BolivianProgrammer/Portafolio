@@ -3,6 +3,13 @@ const GH = "https://github.com/BolivianProgrammer/";
 
 const projects = [
   {
+    name: "CompaEstudio (MVP)",
+    repo: "Portafolio/tree/main/mvp",
+    desc: "Plataforma para organizar sesiones de estudio por materia y horario, con control de cupos. Incluye pruebas unitarias, de integración y E2E, y un pipeline CI/CD con Docker, Terraform y Ansible.",
+    tags: ["React", "Express", "PostgreSQL", "Playwright"],
+    cat: "web",
+  },
+  {
     name: "Roguelike VR",
     repo: "Roguelike",
     desc: "Juego roguelike en realidad virtual hecho en Unity, con enemigos, un jefe final y escenarios de bosque.",

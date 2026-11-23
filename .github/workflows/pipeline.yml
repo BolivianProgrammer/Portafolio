@@ -1,0 +1,225 @@
+name: CI/CD Portafolio
+
+# dev  -> pruebas automatizadas (unitarias, integración, E2E)
+# main -> pruebas + Docker Hub + Terraform (OCI) + Ansible (+ Cloudflare opcional)
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/compaestudio
+
+jobs:
+  # ───────────────────────────── PRUEBAS ─────────────────────────────
+  unit-tests:
+    name: Pruebas unitarias
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mvp/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mvp/backend/package-lock.json
+      - run: npm ci
+      - run: npm run test:unit -- --ci
+
+  integration-tests:
+    name: Pruebas de integración (API + PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: compaestudio
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: mvp/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mvp/backend/package-lock.json
+      - run: npm ci
+      - run: npm run test:integration -- --ci
+
+  e2e-tests:
+    name: Pruebas E2E (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: compaestudio
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Instalar dependencias
+        run: |
+          npm ci --prefix mvp/backend
+          npm ci --prefix mvp/frontend
+          npm ci --prefix mvp/e2e
+      - name: Instalar navegador
+        working-directory: mvp/e2e
+        run: npx playwright install --with-deps chromium
+      - name: Ejecutar E2E
+        working-directory: mvp/e2e
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: mvp/e2e/playwright-report
+          retention-days: 7
+
+  # ───────────────────────────── MAIN: DOCKER ─────────────────────────────
+  docker:
+    name: Empaquetar portafolio y publicar en Docker Hub
+    if: github.ref == 'refs/heads/main'
+    needs: [unit-tests, integration-tests, e2e-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/portafolio:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/portafolio:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Validar docker-compose.yml
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: docker compose config --quiet
+
+  # ───────────────────────────── MAIN: TERRAFORM ─────────────────────────────
+  infra:
+    name: Terraform - VM Ubuntu 24.04 en OCI
+    if: github.ref == 'refs/heads/main'
+    needs: docker
+    runs-on: ubuntu-latest
+    concurrency:
+      group: portafolio-terraform-state
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: infra/terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_HTTP_ADDRESS: ${{ secrets.OCI_STATE_URL }}
+      OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+      OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+      OCI_PRIVATE_KEY: ${{ secrets.OCI_KEY_FILE }}
+      OCI_REGION: ${{ secrets.OCI_REGION }}
+      TF_VAR_compartment_id: ${{ vars.OCI_COMPARTMENT_OCID || secrets.OCI_TENANCY_OCID }}
+      TF_VAR_ssh_public_key: ${{ vars.VM_SSH_PUBLIC_KEY }}
+      # Free tier por defecto; variable VM_SHAPE=VM.Standard.E4.Flex si Santiago no tiene capacidad
+      TF_VAR_shape: ${{ vars.VM_SHAPE || 'VM.Standard.E2.1.Micro' }}
+    outputs:
+      public_ip: ${{ steps.out.outputs.public_ip }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.2
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init
+      - run: terraform validate
+      - run: terraform plan -out=tfplan
+      - run: terraform apply -auto-approve tfplan
+      - id: out
+        run: echo "public_ip=$(terraform output -raw public_ip)" >> "$GITHUB_OUTPUT"
+
+  # ───────────────────────────── MAIN: ANSIBLE ─────────────────────────────
+  configure:
+    name: Ansible - Docker, Git, firewall y despliegue
+    if: github.ref == 'refs/heads/main'
+    needs: infra
+    runs-on: ubuntu-latest
+    env:
+      VM_IP: ${{ needs.infra.outputs.public_ip }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      IMAGE_TAG: ${{ github.sha }}
+      REPO_URL: https://github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Ansible
+        run: pipx install ansible-core
+      - name: Preparar llave SSH
+        env:
+          SSH_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+      - name: Ejecutar playbook
+        working-directory: infra/ansible
+        run: ansible-playbook -i "${VM_IP}," -u ubuntu --private-key ~/.ssh/vm_key playbook.yml
+      - name: Comprobar el sitio desde Internet
+        run: |
+          for _ in $(seq 1 20); do
+            curl -fsS -o /dev/null "http://${VM_IP}/" && echo "OK: http://${VM_IP}/" && exit 0
+            sleep 5
+          done
+          echo "El sitio no respondió" && exit 1
+
+  # ───────────────────── EXTRA: dominio con Cloudflare ─────────────────────
+  cloudflare:
+    name: Cloudflare - registro DNS del portafolio
+    if: github.ref == 'refs/heads/main'
+    needs: [infra, configure]
+    runs-on: ubuntu-latest
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      CF_NAME: ${{ vars.CLOUDFLARE_RECORD_NAME }}
+      VM_IP: ${{ needs.infra.outputs.public_ip }}
+    steps:
+      - name: Crear o actualizar registro A (proxied)
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ZONE" ] || [ -z "$CF_NAME" ]; then
+            echo "::notice::Cloudflare no configurado (faltan CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID o CLOUDFLARE_RECORD_NAME); se omite."
+            exit 0
+          fi
+          api="https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/dns_records"
+          auth=(-H "Authorization: Bearer ${CF_TOKEN}" -H "Content-Type: application/json")
+          body=$(jq -nc --arg n "$CF_NAME" --arg ip "$VM_IP" '{type:"A",name:$n,content:$ip,ttl:1,proxied:true}')
+          id=$(curl -fsS "${auth[@]}" "${api}?type=A&name=${CF_NAME}" | jq -r '.result[0].id // empty')
+          if [ -n "$id" ]; then
+            curl -fsS -X PUT "${auth[@]}" "${api}/${id}" --data "$body" | jq '.success'
+          else
+            curl -fsS -X POST "${auth[@]}" "${api}" --data "$body" | jq '.success'
+          fi
+          echo "Portafolio disponible en https://${CF_NAME}"

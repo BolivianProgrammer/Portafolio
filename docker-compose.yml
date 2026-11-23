@@ -1,0 +1,9 @@
+services:
+  portafolio:
+    image: ${DOCKERHUB_USERNAME:-bolivianprogrammer}/portafolio:${TAG:-latest}
+    build: .
+    container_name: portafolio
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
