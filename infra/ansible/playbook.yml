@@ -1,0 +1,121 @@
+# Configura la VM: Docker, Git, firewall (ufw + iptables 80/443) y despliega el portafolio.
+# Uso: ansible-playbook -i "<IP>," -u ubuntu --private-key key infra/ansible/playbook.yml
+- name: Configurar VM del portafolio
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    app_dir: /opt/portafolio
+    repo_url: "{{ lookup('env', 'REPO_URL') | default('https://github.com/BolivianProgrammer/Portafolio.git', true) }}"
+    repo_branch: main
+    dockerhub_username: "{{ lookup('env', 'DOCKERHUB_USERNAME') }}"
+    image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
+    open_ports: [22, 80, 443]
+
+  pre_tasks:
+    - name: Esperar a que la VM acepte SSH (cloud-init)
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+    - name: Esperar a que termine cloud-init
+      ansible.builtin.command: cloud-init status --wait
+      register: cloud_init
+      changed_when: false
+      failed_when: cloud_init.rc not in [0, 2] # 2 = terminó con avisos recuperables
+
+    - name: Recopilar datos del sistema
+      ansible.builtin.setup:
+
+  tasks:
+    - name: Instalar Docker, Git y herramientas de firewall
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+          - git
+          - ufw
+          - iptables-persistent
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    - name: Habilitar el servicio de Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Agregar el usuario ubuntu al grupo docker
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    # --- Firewall ---
+    # Las imágenes Ubuntu de OCI traen reglas iptables que rechazan todo salvo SSH,
+    # por eso se insertan reglas ACCEPT al inicio de la cadena INPUT.
+    - name: iptables - permitir tráfico entrante en 80 y 443
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_port: "{{ item }}"
+        ctstate: [NEW]
+        jump: ACCEPT
+        action: insert
+        comment: "portafolio {{ item }}"
+      loop: [80, 443]
+
+    - name: iptables - guardar reglas de forma persistente
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: true
+
+    - name: ufw - permitir SSH, HTTP y HTTPS
+      ansible.builtin.command: "ufw allow {{ item }}/tcp"
+      loop: "{{ open_ports }}"
+      register: ufw_allow
+      changed_when: "'Skipping' not in ufw_allow.stdout"
+
+    - name: ufw - activar firewall
+      ansible.builtin.command: ufw --force enable
+      register: ufw_enable
+      changed_when: "'active' in ufw_enable.stdout"
+
+    # --- Despliegue ---
+    - name: Clonar o actualizar el repositorio con Git
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: "{{ repo_branch }}"
+        force: true
+
+    - name: Variables para docker compose
+      ansible.builtin.copy:
+        dest: "{{ app_dir }}/.env"
+        mode: "0600"
+        content: |
+          DOCKERHUB_USERNAME={{ dockerhub_username }}
+          TAG={{ image_tag }}
+
+    - name: Descargar la imagen desde Docker Hub
+      ansible.builtin.command: docker compose pull
+      args:
+        chdir: "{{ app_dir }}"
+      changed_when: true
+
+    - name: Levantar el portafolio
+      ansible.builtin.command: docker compose up -d --remove-orphans
+      args:
+        chdir: "{{ app_dir }}"
+      changed_when: true
+
+    - name: Verificar que el sitio responde en el puerto 80
+      ansible.builtin.uri:
+        url: http://127.0.0.1/
+        status_code: 200
+      register: check
+      retries: 10
+      delay: 3
+      until: check.status == 200

@@ -1,1 +1,9 @@
 .claude/
+node_modules/
+dist/
+test-results/
+playwright-report/
+.terraform/
+*.tfstate*
+*.tfplan
+.env
