@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tyler Wilson | Portafolio</title>
+  <meta name="description" content="Portafolio de Tyler Wilson, estudiante de Ingeniería de Sistemas en Univalle: desarrollo web, móvil, videojuegos, cloud y QA.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="nav">
+    <a href="#inicio" class="logo">TW<span>.</span></a>
+    <button class="nav-toggle" aria-label="Abrir menú" aria-expanded="false">☰</button>
+    <nav>
+      <ul class="nav-links">
+        <li><a href="#sobre-mi">Sobre mí</a></li>
+        <li><a href="#habilidades">Habilidades</a></li>
+        <li><a href="#proyectos">Proyectos</a></li>
+        <li><a href="#contacto">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section id="inicio" class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Hola, soy</p>
+        <h1>Tyler Wilson</h1>
+        <h2>Estudiante de Ingeniería de Sistemas · Univalle</h2>
+        <p class="lead">
+          Desarrollo aplicaciones web con .NET y JavaScript, apps móviles con Kotlin,
+          videojuegos en Unity y despliegues en la nube con Docker y Oracle Cloud.
+        </p>
+        <div class="hero-actions">
+          <a href="#proyectos" class="btn btn-primary">Ver proyectos</a>
+          <a href="https://github.com/BolivianProgrammer" target="_blank" rel="noopener" class="btn btn-ghost">GitHub</a>
+        </div>
+      </div>
+      <div class="hero-img">
+        <img src="https://avatars.githubusercontent.com/u/127765149?v=4" alt="Foto de perfil de Tyler Wilson" width="260" height="260">
+      </div>
+    </section>
+
+    <!-- SOBRE MI -->
+    <section id="sobre-mi" class="section">
+      <h2 class="section-title">Sobre mí</h2>
+      <div class="about-grid">
+        <p>
+          Soy estudiante de sexto semestre de Ingeniería de Sistemas en la Universidad del Valle (Bolivia).
+          Me gusta construir software de punta a punta: desde el diseño de la base de datos y el backend
+          hasta la interfaz, las pruebas y el despliegue. A lo largo de la carrera trabajé en sistemas de gestión,
+          una red social universitaria, apps móviles con mapas, procesamiento de imágenes y videojuegos, incluido un roguelike en VR.
+        </p>
+        <ul class="stats">
+          <li><strong>45+</strong><span>repositorios</span></li>
+          <li><strong>8+</strong><span>lenguajes</span></li>
+          <li><strong>6</strong><span>semestres</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- HABILIDADES -->
+    <section id="habilidades" class="section">
+      <h2 class="section-title">Habilidades</h2>
+      <div class="skills">
+        <div class="skill-card">
+          <h3>Backend</h3>
+          <p>C# · ASP.NET Core (Razor Pages, MVC, Web API, Identity) · Node.js / Express · Python · Java</p>
+        </div>
+        <div class="skill-card">
+          <h3>Frontend</h3>
+          <p>HTML · CSS · JavaScript · TypeScript</p>
+        </div>
+        <div class="skill-card">
+          <h3>Móvil</h3>
+          <p>Kotlin · Android · Google Maps SDK</p>
+        </div>
+        <div class="skill-card">
+          <h3>Videojuegos</h3>
+          <p>Unity · C# · VR · juegos 2D</p>
+        </div>
+        <div class="skill-card">
+          <h3>Cloud y DevOps</h3>
+          <p>Docker · Oracle Cloud (OCI) · Terraform · Kubernetes · Render · Integración continua</p>
+        </div>
+        <div class="skill-card">
+          <h3>Calidad y procesos</h3>
+          <p>Jest · Cypress + Cucumber · Git Flow · forks y pull requests · SQL</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROYECTOS -->
+    <section id="proyectos" class="section">
+      <h2 class="section-title">Proyectos</h2>
+      <div class="filters" role="group" aria-label="Filtrar proyectos">
+        <button class="filter active" data-filter="all">Todos</button>
+        <button class="filter" data-filter="web">Web</button>
+        <button class="filter" data-filter="movil">Móvil</button>
+        <button class="filter" data-filter="juegos">Juegos</button>
+        <button class="filter" data-filter="cloud">Cloud / QA</button>
+      </div>
+      <div class="projects" id="projects-grid"></div>
+    </section>
+
+    <!-- CONTACTO -->
+    <section id="contacto" class="section contact">
+      <h2 class="section-title">Contacto</h2>
+      <p>¿Quieres hablar de algún proyecto? Escríbeme o revisa mi código.</p>
+      <div class="hero-actions center">
+        <!-- TODO: reemplaza con tu correo real -->
+        <a href="mailto:tu-correo@ejemplo.com" class="btn btn-primary">Enviar correo</a>
+        <a href="https://github.com/BolivianProgrammer" target="_blank" rel="noopener" class="btn btn-ghost">GitHub</a>
+        <!-- TODO: reemplaza con tu perfil de LinkedIn (o borra este botón) -->
+        <a href="https://www.linkedin.com/" target="_blank" rel="noopener" class="btn btn-ghost">LinkedIn</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© <span id="year"></span> Tyler Wilson · Proyecto de Sistemas 3, Univalle</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
