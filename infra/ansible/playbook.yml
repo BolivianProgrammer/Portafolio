@@ -105,14 +105,14 @@
           DOCKERHUB_USERNAME={{ dockerhub_username }}
           TAG={{ image_tag }}
 
-    - name: Descargar la imagen desde Docker Hub
-      ansible.builtin.command: docker compose pull
+    - name: Descargar las imágenes (Docker Hub y cloudflared)
+      ansible.builtin.command: docker compose --profile tunnel pull
       args:
         chdir: "{{ app_dir }}"
       changed_when: true
 
-    - name: Levantar el portafolio
-      ansible.builtin.command: docker compose up -d --remove-orphans
+    - name: Levantar el portafolio y el túnel de Cloudflare
+      ansible.builtin.command: docker compose --profile tunnel up -d --remove-orphans
       args:
         chdir: "{{ app_dir }}"
       changed_when: true
@@ -125,3 +125,24 @@
       retries: 10
       delay: 3
       until: check.status == 200
+
+    # --- Extra: URL pública con Cloudflare Tunnel ---
+    - name: Obtener la URL de Cloudflare Tunnel
+      ansible.builtin.shell: >-
+        docker logs portafolio-tunnel 2>&1
+        | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -n 1
+      register: tunnel
+      changed_when: false
+      retries: 20
+      delay: 3
+      until: tunnel.stdout | length > 0
+
+    - name: Guardar la URL del túnel en la VM
+      ansible.builtin.copy:
+        dest: /opt/portafolio-tunnel-url
+        content: "{{ tunnel.stdout }}\n"
+        mode: "0644"
+
+    - name: URL pública del portafolio (Cloudflare)
+      ansible.builtin.debug:
+        msg: "{{ tunnel.stdout }}"

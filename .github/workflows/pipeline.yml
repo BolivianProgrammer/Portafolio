@@ -207,6 +207,22 @@ jobs:
             sleep 5
           done
           echo "El sitio no respondió" && exit 1
+      - name: Comprobar la URL de Cloudflare Tunnel
+        run: |
+          url=$(ssh -i ~/.ssh/vm_key -o StrictHostKeyChecking=no "ubuntu@${VM_IP}" cat /opt/portafolio-tunnel-url)
+          for _ in $(seq 1 24); do
+            if curl -fsS -o /dev/null "$url"; then
+              echo "OK: $url"
+              {
+                echo "## 🌐 Portafolio desplegado"
+                echo "- Cloudflare Tunnel: $url"
+                echo "- IP pública: http://${VM_IP} · https://${VM_IP}"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::La URL del túnel ($url) no respondió" && exit 1
 
   # ───────────────────── EXTRA: dominio con Cloudflare ─────────────────────
   cloudflare:
